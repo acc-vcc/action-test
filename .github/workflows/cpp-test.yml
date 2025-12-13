@@ -67,7 +67,7 @@ jobs:
         run: |
           mkdir -p bin
           # コンテナを一時的に作成
-          cid=$(docker create ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest)
+          cid=$(docker create --entrypoint "" ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest)
           # コンテナ内の /artifact を bin/ にコピー
           docker cp $cid:/artifact/. bin/
           # 一時コンテナを削除
