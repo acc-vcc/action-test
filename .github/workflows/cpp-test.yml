@@ -17,9 +17,12 @@ jobs:
     - name: Log in to GitHub Container Registry
       run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
 
+    - name: Pull cached image
+      run: docker pull ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest || true
+
     - name: Build and push Docker image (cache)
       run: |
-        docker build -t ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest .
+        docker build --cache-from ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest -t ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest .
         docker push ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest
 
     - name: Run build (make only for PR)
