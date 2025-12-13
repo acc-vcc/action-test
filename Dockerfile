@@ -8,11 +8,11 @@ RUN apt-get update && \
     g++ \
     pkg-config \
     qtbase5-dev \
-    qt5-qmake \
     qtbase5-dev-tools \
     libqt5test-dev \
     liblog4cpp5-dev && \
     rm -rf /var/lib/apt/lists/*
+
 
 
 # 作業ディレクトリ
