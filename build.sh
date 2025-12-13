@@ -1,4 +1,8 @@
 #!/bin/bash
 set -e
-qmake
+
+# .pro ファイルがある前提で Makefile を生成
+qmake testApp.pro
+
+# ビルド
 make "$@"
