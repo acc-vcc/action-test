@@ -18,6 +18,3 @@ WORKDIR /app
 
 # ソースコードとMakefileをコピー
 COPY . .
-
-# デフォルトのコマンドは make を呼ぶ
-CMD ["make"]
