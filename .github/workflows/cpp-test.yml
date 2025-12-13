@@ -66,8 +66,12 @@ jobs:
       - name: Extract artifacts
         run: |
           mkdir -p bin
-          docker run --rm -v ${{ github.workspace }}:/out ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
-            cp -r /artifact/* /out/bin/
+          # コンテナを一時的に作成
+          id=$(docker create ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest)
+          # コンテナ内の /artifact を bin/ にコピー
+          docker cp $cid:/artifact/. bin/
+          # 一時コンテナを削除
+          docker rm $cid
 
       - name: Create tar.gz
         run: tar zcvf bin.tar.gz bin
