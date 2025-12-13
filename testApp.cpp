@@ -36,4 +36,3 @@ private slots:
 };
 
 QTEST_MAIN(TestApp)
-#include "test_app.moc"
