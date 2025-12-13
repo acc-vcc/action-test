@@ -12,4 +12,7 @@ $(BIN_DIR)/$(TARGET): $(SRC)
     $(CXX) $(CXXFLAGS) -o $(TARGET) $(SRC) $(LIBS)
 
 clean:
-    rm -f $(TARGET)
+    rm -f $(BIN_DIR)/$(TARGET) bin.tar.gz
+
+package:
+    tar zcvf bin.tar.gz bin
