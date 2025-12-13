@@ -1,3 +1,5 @@
+# 依存インストール専用ステージ
+FROM ubuntu:22.04 AS deps
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     apt-utils \
