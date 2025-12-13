@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
 
     steps:
     - name: Checkout code
@@ -35,7 +36,6 @@ jobs:
         cache-to: type=registry,ref=ghcr.io/acc-vcc/action-test/qt-log4cpp-app:cache,mode=max
 
     - name: Run build (make only for PR)
-      if: github.event_name == 'pull_request'
       run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest ./build.sh
 
   package:
