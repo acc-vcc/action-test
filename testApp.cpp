@@ -1,7 +1,7 @@
 #include <QtTest/QtTest>
 #include <log4cpp/Category.hh>
 #include <log4cpp/PropertyConfigurator.hh>
-#include "main.cpp"
+#include "parts.cpp"
 
 class TestApp : public QObject {
     Q_OBJECT
