@@ -4,4 +4,4 @@ QT += core test
 CONFIG += c++17 console
 SOURCES += testApp.cpp parts.cpp
 INCLUDEPATH += .
-LIBS += -llog4cpp
+LIBS += -llog4cpp -lQt5Test
