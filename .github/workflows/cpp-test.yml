@@ -22,11 +22,15 @@ jobs:
 
     - name: Make build.sh executable
       run: chmod +x build.sh
-
+      
     - name: Build and push Docker image (cache)
-      run: |
-        docker build --cache-from ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest -t ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest .
-        docker push ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest
+        cache-from: type=registry,ref=ghcr.io/acc-vcc/action-test/qt-log4cpp-app:cache
+        cache-to: type=registry,ref=ghcr.io/acc-vcc/action-test/qt-log4cpp-app:cache,mode=max
 
     - name: Run build (make only for PR)
       if: github.event_name == 'pull_request'
