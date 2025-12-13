@@ -1,0 +1,25 @@
+name: C++ Build and Test
+
+# いつ動かすか
+on:
+  push:        # コミット時
+    branches: [ main ]
+  pull_request: # プルリク時
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest   # 実行環境
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install g++
+      run: sudo apt-get update && sudo apt-get install -y g++
+
+    - name: Build main program
+      run: g++ -std=c++17 -o main main.cpp
+
+    - name: Run tests
+      run: g++ -std=c++17 -o test test_main.cpp && ./test
