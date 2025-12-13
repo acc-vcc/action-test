@@ -12,54 +12,57 @@ jobs:
     if: github.event_name == 'pull_request'
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      with:
-        driver: docker-container
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
 
-    - name: Log in to GitHub Container Registry
-      run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
 
-    - name: Make build.sh executable
-      run: chmod +x build.sh
+      - name: Make build.sh executable
+        run: chmod +x build.sh
 
-    - name: Build and push Docker image (cache)
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest
-        cache-from: type=registry,ref=ghcr.io/acc-vcc/action-test/qt-log4cpp-app:cache
-        cache-to: type=registry,ref=ghcr.io/acc-vcc/action-test/qt-log4cpp-app:cache,mode=max
+      - name: Build and push Docker image (cache)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest
+          cache-from: type=registry,ref=ghcr.io/acc-vcc/action-test/qt-log4cpp-app:cache
+          cache-to: type=registry,ref=ghcr.io/acc-vcc/action-test/qt-log4cpp-app:cache,mode=max
 
-    - name: Run build (make only for PR)
-      run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest ./build.sh
+      - name: Run build (make only for PR)
+        run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest ./build.sh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: testApp-bin
+          path: bin/testApp   # ← PR 時に生成された実行ファイルを保存
 
   package:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Log in to GitHub Container Registry
-      run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: testApp-bin
+          path: bin            # ← push 時に bin/ に展開される
 
-    - name: Pull cached Docker image
-      run: docker pull ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest
+      - name: Create tar.gz
+        run: tar zcvf bin.tar.gz bin
 
-    - name: Make build.sh executable
-      run: chmod +x build.sh
-      
-    - name: Run package (make package)
-      run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest ./build.sh package
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: qt-log4cpp-bin
-        path: bin.tar.gz
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-log4cpp-bin
+          path: bin.tar.gz
