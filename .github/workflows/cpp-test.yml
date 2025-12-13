@@ -53,6 +53,9 @@ jobs:
     - name: Pull cached Docker image
       run: docker pull ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest
 
+    - name: Make build.sh executable
+      run: chmod +x build.sh
+      
     - name: Run package (make package)
       run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest ./build.sh package
 

@@ -18,4 +18,3 @@ RUN apt-get update && \
 FROM deps AS build
 WORKDIR /app
 COPY . .
-CMD ["./build.sh"]
