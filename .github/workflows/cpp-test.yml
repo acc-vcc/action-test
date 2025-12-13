@@ -44,7 +44,7 @@ jobs:
       - name: Build artifact image
         run: |
           docker build -t ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest -f- . <<EOF
-          FROM scratch
+          FROM alpine:3.19
           COPY output/ /artifact/
           EOF
           docker push ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest
@@ -66,12 +66,8 @@ jobs:
       - name: Extract artifacts
         run: |
           mkdir -p bin
-          # コンテナを一時的に作成
-          cid=$(docker create --entrypoint "" ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest)
-          # コンテナ内の /artifact を bin/ にコピー
-          docker cp $cid:/artifact/. bin/
-          # 一時コンテナを削除
-          docker rm $cid
+          docker run --rm -v ${{ github.workspace }}:/out ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
+            cp -r /artifact/. /out/bin/
 
       - name: Create tar.gz
         run: tar zcvf bin.tar.gz bin
