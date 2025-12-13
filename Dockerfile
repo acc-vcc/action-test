@@ -10,7 +10,6 @@ RUN apt-get update && \
     pkg-config \
     qtbase5-dev \
     qtbase5-dev-tools \
-    libqt5test-dev \
     liblog4cpp5-dev && \
     rm -rf /var/lib/apt/lists/*
 
