@@ -1,11 +1,7 @@
-# コンパイラとオプション
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall
+LIBS = -llog4cpp `pkg-config --cflags --libs Qt5Core`
 
-# リンクするライブラリ
-LIBS = -llog4cpp
-
-# ターゲットとソース
 TARGET = testApp
 SRC = main.cpp
 
