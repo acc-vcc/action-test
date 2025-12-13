@@ -54,8 +54,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
       - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
+
+      - name: pull artifact image
         run: docker pull ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest
 
       - name: Extract artifacts
