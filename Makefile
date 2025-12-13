@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall
+CXXFLAGS = -std=c++17 -Wall -fPIC
 LIBS = -llog4cpp `pkg-config --cflags --libs Qt5Core`
 BIN_DIR = bin
 
