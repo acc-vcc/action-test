@@ -23,8 +23,8 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
 
-      - name: Make build.sh executable
-        run: chmod +x build.sh
+      - name: Make build.sh copy.sh executable
+        run: chmod +x build.sh copy.sh
 
       - name: Build and push Docker image (cache)
         uses: docker/build-push-action@v5
@@ -38,25 +38,31 @@ jobs:
       - name: Run build (make only for PR)
         run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest ./build.sh
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: testApp-bin
-          path: bin/testApp   # ← PR 時に生成された実行ファイルを保存
+      - name: Copy artifacts
+        run: ./copy.sh   # ← 成果物コピー処理をスクリプト化
+        
+      - name: Build artifact image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest -<<EOF
+          FROM scratch
+          COPY output/ /artifact/
+          EOF
+          docker push ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest
 
   package:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
       - name: Checkout code
-        uses: actions/checkout@v4
+        run: docker pull ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: testApp-bin
-          path: bin            # ← push 時に bin/ に展開される
+      - name: Extract artifacts
+        run: |
+          mkdir -p bin
+          docker run --rm -v ${{ github.workspace }}:/out ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
+            cp -r /artifact/* /out/bin/
 
       - name: Create tar.gz
         run: tar zcvf bin.tar.gz bin
