@@ -4,7 +4,7 @@ LIBS = -llog4cpp `pkg-config --cflags --libs Qt5Core`
 BIN_DIR = bin
 
 TARGET = testApp
-SRC = main.cpp
+SRC = testApp.cpp parts.cpp
 
 all: $(BIN_DIR)/$(TARGET)
 
