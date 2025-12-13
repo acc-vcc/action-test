@@ -8,7 +8,6 @@ RUN apt-get update && \
     g++ \
     pkg-config \
     qtbase5-dev \
-    qtchooser \
     qt5-qmake \
     qtbase5-dev-tools \
     libqt5test-dev \
