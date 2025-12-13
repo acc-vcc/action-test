@@ -43,7 +43,7 @@ jobs:
         
       - name: Build artifact image
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest -<<EOF
+          docker build -t ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest -f- . <<EOF
           FROM scratch
           COPY output/ /artifact/
           EOF
