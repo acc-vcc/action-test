@@ -20,6 +20,9 @@ jobs:
     - name: Pull cached image
       run: docker pull ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest || true
 
+    - name: Make build.sh executable
+      run: chmod +x build.sh
+
     - name: Build and push Docker image (cache)
       run: |
         docker build --cache-from ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest -t ghcr.io/acc-vcc/action-test/qt-log4cpp-app:latest .
