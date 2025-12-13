@@ -1,25 +1,59 @@
-name: C++ Build and Test
+name: CI/CD with Docker Cache (Qt + log4cpp)
 
-# いつ動かすか
 on:
-  push:        # コミット時
+  pull_request:
     branches: [ main ]
-  pull_request: # プルリク時
+  push:
     branches: [ main ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest   # 実行環境
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install g++
-      run: sudo apt-get update && sudo apt-get install -y g++
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build main program
-      run: g++ -std=c++17 -o main main.cpp
+    - name: Build and push Docker image (cache)
+      run: |
+        docker build -t ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest .
+        docker push ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest
 
-    - name: Run tests
-      run: g++ -std=c++17 -o test test_main.cpp && ./test
+    - name: Run build (make only for PR)
+      if: github.event_name == 'pull_request'
+      run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest make
+
+  package:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Pull cached Docker image
+      run: docker pull ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest
+
+    - name: Run package (make package)
+      run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest make package
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: qt-log4cpp-bin
+        path: bin.tar.gz
