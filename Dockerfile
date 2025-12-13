@@ -1,6 +1,5 @@
-FROM ubuntu:22.04
-
-# 必要なツールとライブラリをインストール
+# 依存インストール専用ステージ
+FROM ubuntu:22.04 AS deps
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     apt-utils \
@@ -13,8 +12,8 @@ RUN apt-get update && \
     liblog4cpp5-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# 作業ディレクトリ
+# ビルド用ステージ
+FROM deps AS build
 WORKDIR /app
-
-# ソースコードとMakefileをコピー
 COPY . .
+CMD ["./build.sh"]
