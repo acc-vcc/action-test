@@ -25,6 +25,9 @@ private slots:
 
         QCOMPARE(add(-1, 1), 0);
         root.debug("Checked add(-1,1) == 0");
+
+        QCOMPARE(times(3, 5), 15);
+        root.debug("Checked add(3,5) == 0");
     }
 
     void cleanupTestCase() {
