@@ -1,39 +1,38 @@
-#include <QtTest/QtTest>
+#include <QCoreApplication>
+#include <QElapsedTimer>
 #include <log4cpp/Category.hh>
 #include <log4cpp/PropertyConfigurator.hh>
-#include "parts.cpp"
+#include "parts.cpp"   // add(), times() を定義していると仮定
 
-class TestApp : public QObject {
-    Q_OBJECT
+int main(int argc, char *argv[])
+{
+    QCoreApplication app(argc, argv);
 
-private slots:
-    void initTestCase() {
-        // ログ設定ファイルを読み込む
-        try {
-            log4cpp::PropertyConfigurator::configure("log4cpp.conf");
-        } catch (log4cpp::ConfigureFailure& f) {
-            qWarning("Log4cpp configure failed: %s", f.what());
-        }
+    // ログ設定ファイルを読み込む
+    try {
+        log4cpp::PropertyConfigurator::configure("log4cpp.conf");
+    } catch (log4cpp::ConfigureFailure& f) {
+        qWarning("Log4cpp configure failed: %s", f.what());
     }
 
-    void testAdd() {
-        log4cpp::Category& root = log4cpp::Category::getRoot();
-        root.info("Running testAdd...");
+    log4cpp::Category& root = log4cpp::Category::getRoot();
+    root.info("Application started");
 
-        QCOMPARE(add(2, 3), 5);
-        root.debug("Checked add(2,3) == 5");
+    QElapsedTimer timer;
+    timer.start();
 
-        QCOMPARE(add(-1, 1), 0);
-        root.debug("Checked add(-1,1) == 0");
+    int a = 2, b = 3;
+    int sum = add(a, b);
+    root.info("add(%d,%d) = %d", a, b, sum);
 
-        QCOMPARE(times(3, 5), 15);
-        root.debug("Checked add(3,5) == 0");
-    }
+    int mul = times(a, b);
+    root.info("times(%d,%d) = %d", a, b, mul);
 
-    void cleanupTestCase() {
-        log4cpp::Category::shutdown();
-    }
-};
+    qint64 elapsed = timer.elapsed();
+    root.info("Elapsed time: %lld ms", elapsed);
 
-QTEST_MAIN(TestApp)
-#include "test_app.moc"
+    root.info("Application finished");
+    log4cpp::Category::shutdown();
+
+    return 0;
+}
