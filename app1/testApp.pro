@@ -4,7 +4,8 @@ QT += core
 CONFIG += c++17 console
 # まとめて指定
 SOURCES += $$files(src/*.cpp)
-INCLUDEPATH += $$files(include/*.h)
+HEADERS += $$files(include/*.h)
+INCLUDEPATH += include
 LIBS += -llog4cpp
 
 # 出力先ディレクトリを指定
