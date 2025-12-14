@@ -9,6 +9,16 @@ on:
     branches: [ main ]
   push:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target_dir:
+        description: 'Which directory to build: app1, app2, app3, all'
+        required: false
+        default: 'app1'
+      use_latest_env:
+        description: 'Try to pull env images before building (true/false)'
+        required: false
+        default: 'true'
 
 jobs:
   build:
@@ -16,7 +26,7 @@ jobs:
     outputs:
       IMAGE_REF_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
       IMAGE_REF_LATEST: ${{ steps.set_image_ref.outputs.image_ref_latest }}
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout code (full history for diff)
@@ -47,15 +57,19 @@ jobs:
           driver: docker-container
 
       - name: Log in to GitHub Container Registry
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
+        run: |
+          if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+            echo "Logging in to GHCR..."
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+          else
+            echo "GHCR_PAT not set; skipping GHCR login."
+          fi
 
-      #- name: Make build.sh copy.sh executable
-      #  run: chmod +x build.sh copy.sh || true
-          
       # -----------------------
       # C++ 環境イメージ（使い回し + キャッシュ）
       # -----------------------
       - name: Try to pull C++ env image (use cached env if available)
+        id: pull_cpp_env
         run: |
           if docker pull ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest; then
             echo "pulled_cpp=true" >> $GITHUB_OUTPUT
@@ -64,7 +78,7 @@ jobs:
           fi
 
       - name: Build and push Docker image (cache)
-        if: steps.pull_java_env.outputs.pulled_cpp == 'false' || steps.filter.outputs.dockerfile == 'true'  # Dockerfileに変更があれば再ビルド
+        if: steps.pull_cpp_env.outputs.pulled_cpp == 'false' || steps.filter.outputs.dockerfile == 'true'  # Dockerfileに変更があれば再ビルド
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -72,11 +86,12 @@ jobs:
           tags: ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest,ghcr.io/${{ github.repository }}/qt-log4cpp-app:sha-${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/qt-log4cpp-app:cache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/qt-log4cpp-app:cache,mode=max
-          
+
       # -----------------------
       # Java 環境イメージ（使い回し + キャッシュ）
       # -----------------------
       - name: Try to pull Java env image (use cached env if available)
+        id: pull_java_env
         run: |
           if docker pull ghcr.io/${{ github.repository }}/java-app:latest; then
             echo "pulled_java=true" >> $GITHUB_OUTPUT
@@ -96,33 +111,33 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/java-app:cache,mode=max
           
       - name: Build and Copy artifacts app1 (only if changed)
-        if: steps.filter.outputs.app1 == 'true'
+        if: steps.filter.outputs.app1 == 'true' || github.event.inputs.target_dir == 'app1' || github.event.inputs.target_dir == 'all'
         run: |
           echo "=== Building app1 ==="
           docker run --rm -v ${{ github.workspace }}:/app -w /app/app1 ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
             sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
 
       - name: Build and Copy artifacts app2 (only if changed)
-        if: steps.filter.outputs.app2 == 'true'
+        if: steps.filter.outputs.app2 == 'true' || github.event.inputs.target_dir == 'app2' || github.event.inputs.target_dir == 'all'
         run: |
           echo "=== Building app2 ==="
           docker run --rm -v ${{ github.workspace }}:/app -w /app/app2 ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
             sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
         
       - name: Build and Copy artifacts app3 (only if changed)
-        if: steps.filter.outputs.app3 == 'true'
+        if: steps.filter.outputs.app3 == 'true' || github.event.inputs.target_dir == 'app3' || github.event.inputs.target_dir == 'all'
         run: |
           echo "=== Building app3 ==="
           docker run --rm -v ${{ github.workspace }}:/app -w /app/app3 ghcr.io/${{ github.repository }}/java-app:latest \
             sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
-        
+
       - name: Show host-side output directory (copy source)
         run: |
           echo "=== Host: output/ (コピー元) ==="
           ls -la output || true
           echo "=== Recursive listing ==="
           ls -R output || true
-          
+
       - name: Create image tags and set outputs
         id: set_image_ref
         run: |
@@ -135,7 +150,7 @@ jobs:
           echo "image_ref_sha=${image_ref_sha}" >> $GITHUB_OUTPUT
           echo "image_ref_latest=${image_ref_latest}" >> $GITHUB_OUTPUT
           echo "Created tags: ${image_ref_sha} and ${image_ref_latest}"
-        
+
       - name: Build artifact image
         env:
           IMAGE_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
@@ -152,7 +167,7 @@ jobs:
 
   package:
     # fork PR では secrets が使えないため、fork の場合はジョブ自体をスキップする例
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     #needs: build
     runs-on: ubuntu-latest
     outputs:
@@ -169,8 +184,14 @@ jobs:
           echo "image_ref_latest=${image_fallback}" >> $GITHUB_OUTPUT
 
       - name: Log in to GitHub Container Registry
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
-
+        run: |
+          if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+            echo "Logging in to GHCR..."
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+          else
+            echo "GHCR_PAT not set; skipping GHCR login."
+          fi
+          
       - name: Pull latest artifact image
         id: pull_image
         run: |
@@ -234,7 +255,7 @@ jobs:
         with:
           name: all-output
           path: all-output
-          
+
       - name: Normalize dir name and set short sha
         id: norm
         run: |
