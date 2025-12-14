@@ -1,5 +1,9 @@
 name: CI/CD with Docker Cache (Qt + log4cpp)
 
+permissions:
+  actions: write
+  contents: read
+
 on:
   pull_request:
     branches: [ main ]
