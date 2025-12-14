@@ -63,7 +63,7 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest
 
   package:
-    if: github.event_name == 'push'
+    #if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     steps:
