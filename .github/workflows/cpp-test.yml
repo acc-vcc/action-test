@@ -115,27 +115,27 @@ jobs:
       - name: Extract artifacts
         run: |
           mkdir -p outData
-          echo "=== Host: ./outData (before) ==="
-          ls -la outData || true
-          echo "=== Host: ./outData recursive (before) ==="
-          ls -R outData || true
+          #echo "=== Host: ./outData (before) ==="
+          #ls -la outData || true
+          #echo "=== Host: ./outData recursive (before) ==="
+          #ls -R outData || true
 
-          echo "=== Image: /artifact (before) ==="
-          docker run --rm "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
-            sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
+          #echo "=== Image: /artifact (before) ==="
+          #docker run --rm "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
+          #  sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
 
-          echo "=== Copying /artifact -> ./bin ==="
+          echo "=== Copying /artifact -> outData/bin ==="
           docker run --rm -v ${{ github.workspace }}:/out "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
-            sh -c "cp -r /artifact/. /out/outData/"
+            sh -c "cp -r /artifact/. /out/outData"
 
-          echo "=== Host: ./outData (after) ==="
-          ls -la outData
-          echo "=== Host: ./outData recursive (after) ==="
-          ls -R outData
+          #echo "=== Host: ./outData (after) ==="
+          #ls -la outData
+          #echo "=== Host: ./outData recursive (after) ==="
+          #ls -R outData
 
-          echo "=== Image: /artifact (after) ==="
-          docker run --rm "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
-            sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
+          #echo "=== Image: /artifact (after) ==="
+          #docker run --rm "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
+          #  sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
 
       - name: Create artifact name (timestamp)
         run: |
