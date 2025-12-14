@@ -93,14 +93,19 @@ jobs:
           IMAGE_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
           IMAGE_LATEST: ${{ steps.set_image_ref.outputs.image_ref_latest }}
         run: |
+          if [ ! -d output ] || [ -z "$(ls -A output)" ]; then
+            echo "No output/ or it's empty; skipping artifact image build."
+            exit 0
+          fi
           # Dockerfile.artifact は output/ を /artifact にコピーする最小箱
           docker build -t "${IMAGE_SHA}" -t "${IMAGE_LATEST}" -f Dockerfile.artifact .
           docker push "${IMAGE_SHA}"
           docker push "${IMAGE_LATEST}"
 
   package:
-    if: github.event_name == 'push'
-    #needs    #ne
+    # fork PR では secrets が使えないため、fork の場合はジョブ自体をスキップする例
+    if: ${{ github.event_name == 'push' }}
+    #needs: build
     runs-on: ubuntu-latest
     outputs:
       ALL_OUTPUT_ARTIFACT: all-output
@@ -108,19 +113,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set image ref fallback to latest
+        id: set_image_ref_pkg
+        run: |
+          # Try to use a deterministic latest tag; you can change to plain :latest if preferred
+          image_fallback="ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest"
+          echo "image_ref_latest=${image_fallback}" >> $GITHUB_OUTPUT
+
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
 
       - name: Pull latest artifact image
+        id: pull_image
         run: |
-          image_latest="${{ needs.build.outputs.IMAGE_REF_LATEST }}"
+          image_latest="${{ steps.set_image_ref_pkg.outputs.image_ref_latest }}"
           echo "Pulling ${image_latest}"
           docker pull "${image_latest}"
 
       - name: Extract artifacts
         run: |
           mkdir -p outData
-          docker run --rm -v ${{ github.workspace }}:/out "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
+          docker run --rm -v ${{ github.workspace }}:/out "${{ steps.set_image_ref_pkg.outputs.image_ref_latest }}" \
             sh -c "cp -r /artifact/. /out/outData"
           echo "=== Host: outData ==="
           ls -la outData || true
