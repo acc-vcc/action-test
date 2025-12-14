@@ -99,8 +99,8 @@ jobs:
           docker push "${IMAGE_LATEST}"
 
   package:
-    #if: github.event_name == 'push'
-    needs: build
+    if: github.event_name == 'push'
+    #needs    #ne
     runs-on: ubuntu-latest
     outputs:
       ALL_OUTPUT_ARTIFACT: all-output
