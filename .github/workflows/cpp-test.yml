@@ -11,14 +11,23 @@ on:
     branches: [ main ]
   workflow_dispatch:
     inputs:
-      target_dir:
-        description: 'Which directory to build: app1, app2, app3, all'
+      revision_from:
+        description: 'Range start (branch or commit SHA). Optional.'
         required: false
-        default: 'app1'
+        type: string
+      revision_to:
+        description: 'Range end (branch or commit SHA). Optional. If empty, workflow run ref is used.'
+        required: false
+        type: string
+      select_all:
+        description: 'Build all targets regardless of changes (true/false). Optional.'
+        required: false
+        type: boolean
       use_latest_env:
-        description: 'Try to pull env images before building (true/false)'
+        description: 'Try to pull env images before building (true/false). Optional.'
         required: false
-        default: 'true'
+        type: boolean
+        default: true
 
 jobs:
   build:
@@ -26,7 +35,7 @@ jobs:
     outputs:
       IMAGE_REF_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
       IMAGE_REF_LATEST: ${{ steps.set_image_ref.outputs.image_ref_latest }}
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout code (full history for diff)
@@ -34,22 +43,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect changed groups
-        id: filter
-        # 変化があるディレクトリを選定
-        uses: dorny/paths-filter@v2
-        with:
-          filters: |
-            app1:
-              - 'app1/**'
-            app2:
-              - 'app2/**'
-            app3:
-              - 'app3/**'
-            dockerfile:
-              - 'Dockerfile'
-            dockerfile_java:
-              - 'Dockerfile.java'
+      - name: Try pull env images if requested
+        if: ${{ github.event.inputs.use_latest_env == 'true' }}
+        run: |
+          docker pull ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest || true
+          docker pull ghcr.io/${{ github.repository }}/java-app:latest || true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -65,6 +63,128 @@ jobs:
             echo "GHCR_PAT not set; skipping GHCR login."
           fi
 
+      # Resolve revisions for range (FROM..TO)
+      - name: Resolve revisions for range
+        id: revs
+        run: |
+          set -euo pipefail
+          FROM_INPUT="${{ github.event.inputs.revision_from || '' }}"
+          TO_INPUT="${{ github.event.inputs.revision_to || '' }}"
+
+          # default TO: use workflow run ref (branch) or HEAD
+          if [ -z "$TO_INPUT" ]; then
+            if [ -n "${GITHUB_REF:-}" ]; then
+              TO_INPUT="${GITHUB_REF#refs/heads/}"
+            else
+              TO_INPUT=""
+            fi
+          fi
+
+          echo "Inputs: FROM='${FROM_INPUT}' TO='${TO_INPUT}'"
+
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/* || true
+
+          if [ -n "$FROM_INPUT" ]; then
+            git fetch --no-tags origin "$FROM_INPUT" || true
+          fi
+          if [ -n "$TO_INPUT" ]; then
+            git fetch --no-tags origin "$TO_INPUT" || true
+          fi
+
+          if [ -n "$TO_INPUT" ]; then
+            TO_COMMIT=$(git rev-parse --verify --quiet "$TO_INPUT" || true)
+            if [ -z "$TO_COMMIT" ]; then
+              echo "::error::Failed to resolve TO '$TO_INPUT' to a commit"
+              exit 1
+            fi
+          else
+            TO_COMMIT=$(git rev-parse --verify --quiet HEAD)
+            if [ -z "$TO_COMMIT" ]; then
+              echo "::error::Failed to resolve HEAD"
+              exit 1
+            fi
+          fi
+
+          if [ -n "$FROM_INPUT" ]; then
+            FROM_COMMIT=$(git rev-parse --verify --quiet "$FROM_INPUT" || true)
+            if [ -z "$FROM_COMMIT" ]; then
+              echo "::error::Failed to resolve FROM '$FROM_INPUT' to a commit"
+              exit 1
+            fi
+          else
+            parent=$(git rev-list --parents -n 1 "$TO_COMMIT" | awk '{print $2}')
+            if [ -n "$parent" ]; then
+              FROM_COMMIT="$parent"
+            else
+              FROM_COMMIT=""
+            fi
+          fi
+
+          echo "from_commit=${FROM_COMMIT}" >> $GITHUB_OUTPUT
+          echo "to_commit=${TO_COMMIT}" >> $GITHUB_OUTPUT
+          echo "Determined range: ${FROM_COMMIT}..${TO_COMMIT}"
+
+      - name: Get files changed in commits between FROM..TO
+        id: changed
+        run: |
+          set -euo pipefail
+          FROM="${{ steps.revs.outputs.from_commit }}"
+          TO="${{ steps.revs.outputs.to_commit }}"
+
+          if [ -z "$TO" ]; then
+            echo "::error::No TO commit resolved"
+            exit 1
+          fi
+
+          if [ -z "$FROM" ]; then
+            files=$(git ls-tree -r --name-only "$TO")
+          else
+            files=$(git diff --name-only "${FROM}" "${TO}")
+          fi
+
+          uniq_files=$(echo "$files" | sed '/^$/d' | sort -u)
+          echo "Changed files:"
+          echo "$uniq_files"
+
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$uniq_files" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Map changed files to targets
+        id: detect
+        run: |
+          set -euo pipefail
+          files="${{ steps.changed.outputs.files }}"
+          app1=false; app2=false; app3=false
+          dockerfile=false; dockerfile_java=false
+      
+          if [ -n "$files" ]; then
+          # echo してパイプで while に渡す（here-doc を使わない）
+            echo "$files" | while IFS= read -r f; do
+              case "$f" in
+                app1/*) app1=true ;;
+                app2/*) app2=true ;;
+                app3/*) app3=true ;;
+                Dockerfile)
+                  dockerfile=true
+                  # Dockerfile の変更で全アプリ再ビルドにしたければ以下を有効化
+                  app1=true; app2=true; app3=true
+                  ;;
+                Dockerfile.java)
+                  dockerfile_java=true
+                  app3=true
+                  ;;
+              esac
+            done
+          fi
+
+          echo "app1=$app1" >> $GITHUB_OUTPUT
+          echo "app2=$app2" >> $GITHUB_OUTPUT
+          echo "app3=$app3" >> $GITHUB_OUTPUT
+          echo "dockerfile=$dockerfile" >> $GITHUB_OUTPUT
+          echo "dockerfile_java=$dockerfile_java" >> $GITHUB_OUTPUT
+
       # -----------------------
       # C++ 環境イメージ（使い回し + キャッシュ）
       # -----------------------
@@ -78,7 +198,7 @@ jobs:
           fi
 
       - name: Build and push Docker image (cache)
-        if: steps.pull_cpp_env.outputs.pulled_cpp == 'false' || steps.filter.outputs.dockerfile == 'true'  # Dockerfileに変更があれば再ビルド
+        if: steps.pull_cpp_env.outputs.pulled_cpp == 'false' || steps.detect.outputs.dockerfile == 'true'  # Dockerfileに変更があれば再ビルド
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -98,9 +218,9 @@ jobs:
           else
             echo "pulled_java=false" >> $GITHUB_OUTPUT
           fi
-          
+
       - name: Build and push Java env image (with cache)  # 必要時に再ビルドしてキャッシュ保存
-        if: steps.pull_java_env.outputs.pulled_java == 'false' || steps.filter.outputs.dockerfile_java == 'true'  # Dockerfile.javaに変更があれば再ビルド
+        if: steps.pull_java_env.outputs.pulled_java == 'false' || steps.detect.outputs.dockerfile_java == 'true'  # Dockerfile.javaに変更があれば再ビルド
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -109,23 +229,23 @@ jobs:
           tags: ghcr.io/${{ github.repository }}/java-app:latest,ghcr.io/${{ github.repository }}/java-app:sha-${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/java-app:cache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/java-app:cache,mode=max
-          
+
       - name: Build and Copy artifacts app1 (only if changed)
-        if: steps.filter.outputs.app1 == 'true' || github.event.inputs.target_dir == 'app1' || github.event.inputs.target_dir == 'all'
+        if: steps.detect.outputs.app1 == 'true'
         run: |
           echo "=== Building app1 ==="
           docker run --rm -v ${{ github.workspace }}:/app -w /app/app1 ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
             sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
 
       - name: Build and Copy artifacts app2 (only if changed)
-        if: steps.filter.outputs.app2 == 'true' || github.event.inputs.target_dir == 'app2' || github.event.inputs.target_dir == 'all'
+        if: steps.detect.outputs.app2 == 'true'
         run: |
           echo "=== Building app2 ==="
           docker run --rm -v ${{ github.workspace }}:/app -w /app/app2 ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
             sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
-        
+
       - name: Build and Copy artifacts app3 (only if changed)
-        if: steps.filter.outputs.app3 == 'true' || github.event.inputs.target_dir == 'app3' || github.event.inputs.target_dir == 'all'
+        if: steps.detect.outputs.app3 == 'true'
         run: |
           echo "=== Building app3 ==="
           docker run --rm -v ${{ github.workspace }}:/app -w /app/app3 ghcr.io/${{ github.repository }}/java-app:latest \
@@ -191,7 +311,7 @@ jobs:
           else
             echo "GHCR_PAT not set; skipping GHCR login."
           fi
-          
+
       - name: Pull latest artifact image
         id: pull_image
         run: |
