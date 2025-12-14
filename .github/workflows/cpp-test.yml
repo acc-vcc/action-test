@@ -193,7 +193,7 @@ jobs:
   cleanup-intermediate:
     needs: upload-per-dir
     runs-on: ubuntu-latest
-    if: always()
+    if: ${{ needs.upload-per-dir.result == 'success' }}
     steps:
       - name: Install jq (if needed)
         run: |
