@@ -314,8 +314,8 @@ jobs:
 
   package:
     # fork PR では secrets が使えないため、fork の場合はジョブ自体をスキップする例
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    #needs: build
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.build.result == 'success') }}
+    needs: build
     runs-on: ubuntu-latest
     outputs:
       ALL_OUTPUT_ARTIFACT: all-output
