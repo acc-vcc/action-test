@@ -18,7 +18,7 @@ mkdir -p "${BUILD_DIR}"
 javac -d "${BUILD_DIR}" $(find "${SRC_DIR}" -name "*.java")
 
 # JAR 作成
-JAR_NAME="java-app.jar"
+JAR_NAME="testApp3.jar"
 cd "${BUILD_DIR}"
 jar cfe "${JAR_NAME}" com.example.App com/example/*.class
 mv "${JAR_NAME}" "${BIN_DIR}/"
