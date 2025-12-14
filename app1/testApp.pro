@@ -2,8 +2,10 @@ TEMPLATE = app
 TARGET = testApp
 QT += core
 CONFIG += c++17 console
-SOURCES += testApp.cpp parts.cpp
-INCLUDEPATH += .
+# まとめて指定
+SOURCES += $$files(src/*.cpp)
+HEADERS += $$files(include/*.h)
+INCLUDEPATH += include
 LIBS += -llog4cpp
 
 # 出力先ディレクトリを指定

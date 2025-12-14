@@ -1,0 +1,4 @@
+FROM alpine:3.19
+# 配布重視のためランタイムは同梱しない（軽量化）
+COPY output/ /artifact/
+CMD ["sh"]

@@ -2,7 +2,7 @@
 #include <QElapsedTimer>
 #include <log4cpp/Category.hh>
 #include <log4cpp/PropertyConfigurator.hh>
-#include "parts.cpp"   // add(), times() を定義していると仮定
+#include "parts.h"   // add(), times() を定義していると仮定
 
 int main(int argc, char *argv[])
 {
