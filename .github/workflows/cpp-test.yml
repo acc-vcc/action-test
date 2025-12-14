@@ -55,14 +55,14 @@ jobs:
         run: |
           echo "=== Building app1 ==="
           docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
-            sh -c "cd /app/app1 && chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh || true"
+            sh -c "cd /app/app1 && chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
 
       - name: Build and Copy artifacts app2 (only if changed)
         if: steps.filter.outputs.app2 == 'true'
         run: |
           echo "=== Building app2 ==="
           docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
-            sh -c "cd /app/app2 && chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh || true"
+            sh -c "cd /app/app2 && chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
         
       - name: Show host-side output directory (copy source)
         run: |
