@@ -70,8 +70,21 @@ jobs:
           set -euo pipefail
           FROM_INPUT="${{ github.event.inputs.revision_from || '' }}"
           TO_INPUT="${{ github.event.inputs.revision_to || '' }}"
-
-          # default TO: use workflow run ref (branch) or HEAD
+      
+          # If this is a pull_request event, prefer the PR head/base SHAs
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # github.event.pull_request may be present; use head.sha and base.sha
+            PR_HEAD_SHA="${{ github.event.pull_request.head.sha || '' }}"
+            PR_BASE_SHA="${{ github.event.pull_request.base.sha || '' }}"
+            if [ -n "$PR_HEAD_SHA" ]; then
+              TO_INPUT="$PR_HEAD_SHA"
+            fi
+            if [ -n "$PR_BASE_SHA" ] && [ -z "$FROM_INPUT" ]; then
+              FROM_INPUT="$PR_BASE_SHA"
+            fi
+          fi
+      
+          # default TO: use workflow run ref (branch) or HEAD if not provided
           if [ -z "$TO_INPUT" ]; then
             if [ -n "${GITHUB_REF:-}" ]; then
               TO_INPUT="${GITHUB_REF#refs/heads/}"
@@ -79,21 +92,34 @@ jobs:
               TO_INPUT=""
             fi
           fi
-
-          echo "Inputs: FROM='${FROM_INPUT}' TO='${TO_INPUT}'"
-
+      
+          echo "Inputs after PR handling: FROM='${FROM_INPUT}' TO='${TO_INPUT}'"
+      
           git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
           git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/* || true
-
+      
+          # If TO_INPUT looks like a pull ref (refs/pull/...), fetch it explicitly
+          if echo "$TO_INPUT" | grep -q '^refs/pull/'; then
+            git fetch --no-tags origin "$TO_INPUT" || true
+          fi
+      
           if [ -n "$FROM_INPUT" ]; then
+            # try to fetch the FROM ref/sha
             git fetch --no-tags origin "$FROM_INPUT" || true
           fi
           if [ -n "$TO_INPUT" ]; then
             git fetch --no-tags origin "$TO_INPUT" || true
           fi
-
+      
+          # resolve TO commit
           if [ -n "$TO_INPUT" ]; then
             TO_COMMIT=$(git rev-parse --verify --quiet "$TO_INPUT" || true)
+            if [ -z "$TO_COMMIT" ]; then
+              # fallback: if FETCH_HEAD exists (e.g., fetch of PR merge), try it
+              if git rev-parse --verify --quiet FETCH_HEAD >/dev/null 2>&1; then
+                TO_COMMIT=$(git rev-parse --verify --quiet FETCH_HEAD || true)
+              fi
+            fi
             if [ -z "$TO_COMMIT" ]; then
               echo "::error::Failed to resolve TO '$TO_INPUT' to a commit"
               exit 1
@@ -105,7 +131,8 @@ jobs:
               exit 1
             fi
           fi
-
+      
+          # resolve FROM commit: if empty, use parent of TO
           if [ -n "$FROM_INPUT" ]; then
             FROM_COMMIT=$(git rev-parse --verify --quiet "$FROM_INPUT" || true)
             if [ -z "$FROM_COMMIT" ]; then
@@ -120,7 +147,7 @@ jobs:
               FROM_COMMIT=""
             fi
           fi
-
+      
           echo "from_commit=${FROM_COMMIT}" >> $GITHUB_OUTPUT
           echo "to_commit=${TO_COMMIT}" >> $GITHUB_OUTPUT
           echo "Determined range: ${FROM_COMMIT}..${TO_COMMIT}"
