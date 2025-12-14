@@ -64,6 +64,7 @@ jobs:
 
   package:
     #if: github.event_name == 'push'
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
@@ -79,16 +80,35 @@ jobs:
       - name: Extract artifacts
         run: |
           mkdir -p bin
+          echo "=== Host: ./bin (before) ==="
+          ls -la bin || true
+          echo "=== Host: ./bin recursive (before) ==="
+          ls -R bin || true
+
+          echo "=== Image: /artifact (before) ==="
+          docker run --rm ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
+            sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
+
+          echo "=== Copying /artifact -> ./bin ==="
           docker run --rm -v ${{ github.workspace }}:/out ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
-            cp -r /artifact/bin /out/bin
+            sh -c "cp -r /artifact/. /out/bin/"
+
+          echo "=== Host: ./bin (after) ==="
+          ls -la bin
+          echo "=== Host: ./bin recursive (after) ==="
+          ls -R bin
+
+          echo "=== Image: /artifact (after) ==="
+          docker run --rm ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
+            sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
 
       - name: Create artifact name (timestamp)
         run: |
           ts=$(date +%Y%m%d%H%M%S)
           echo "ARTIFACT_NAME=bin${ts}" >> $GITHUB_ENV
 
-      - name: Upload artifact (upload bin directory as-is)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: bin
+      #- name: Upload artifact (upload bin directory as-is)
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: ${{ env.ARTIFACT_NAME }}
+      #    path: bin
