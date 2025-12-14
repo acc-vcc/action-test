@@ -5,4 +5,4 @@ set -e
 mkdir -p /app/output/app1/bin
 
 # 必要な成果物をコピー
-cp -p bin/testApp /app/output/app1/bin/
+cp -p bin/* /app/output/app1/bin/
