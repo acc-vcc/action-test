@@ -35,7 +35,7 @@ jobs:
     outputs:
       IMAGE_REF_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
       IMAGE_REF_LATEST: ${{ steps.set_image_ref.outputs.image_ref_latest }}
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout code (full history for diff)
@@ -314,8 +314,8 @@ jobs:
 
   package:
     # fork PR では secrets が使えないため、fork の場合はジョブ自体をスキップする例
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    #needs: build
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.build.result == 'success') }}
+    needs: build
     runs-on: ubuntu-latest
     outputs:
       ALL_OUTPUT_ARTIFACT: all-output
