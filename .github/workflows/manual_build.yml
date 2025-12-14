@@ -54,10 +54,15 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker-container
-
+          
       - name: Log in to GitHub Container Registry
-        if: ${{ secrets.GHCR_PAT }}
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+        run: |
+          if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+            echo "Logging in to GHCR..."
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+          else
+            echo "GHCR_PAT not set; skipping GHCR login."
+          fi
 
       - name: Try to pull C++ env image (use cached env if available)
         id: pull_cpp_env
@@ -195,9 +200,14 @@ jobs:
           echo "image_ref_latest=${image_fallback}" >> $GITHUB_OUTPUT
 
       - name: Log in to GitHub Container Registry
-        if: ${{ secrets.GHCR_PAT }}
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-
+        run: |
+          if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+            echo "Logging in to GHCR..."
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+          else
+            echo "GHCR_PAT not set; skipping GHCR login."
+          fi
+          
       - name: Pull latest artifact image
         id: pull_image
         run: |
