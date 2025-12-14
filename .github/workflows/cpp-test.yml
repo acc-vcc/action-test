@@ -169,19 +169,20 @@ jobs:
         with:
           name: all-output
           path: all-output
-
-      - name: Normalize dir name
+          
+      - name: Normalize dir name and set short sha
         id: norm
         run: |
           dir="${{ matrix.dir }}"
-          # safe name for artifact (no slashes, spaces)
           safe=$(echo "$dir" | tr '/ ' '_' | tr -cd '[:alnum:]_-')
+          short=${GITHUB_SHA::8}
           echo "safe=$safe" >> $GITHUB_OUTPUT
+          echo "short=$short" >> $GITHUB_OUTPUT
 
       - name: Upload artifact for directory
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.norm.outputs.safe }}-${{ github.sha::8 }}
+          name: ${{ steps.norm.outputs.safe }}-${{ steps.norm.outputs.short }}
           path: all-output/${{ matrix.dir }}
 
   # 中間出力削除
