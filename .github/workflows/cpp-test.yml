@@ -93,6 +93,10 @@ jobs:
           IMAGE_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
           IMAGE_LATEST: ${{ steps.set_image_ref.outputs.image_ref_latest }}
         run: |
+          if [ ! -d output ] || [ -z "$(ls -A output)" ]; then
+            echo "No output/ or it's empty; skipping artifact image build."
+            exit 0
+          fi
           # Dockerfile.artifact は output/ を /artifact にコピーする最小箱
           docker build -t "${IMAGE_SHA}" -t "${IMAGE_LATEST}" -f Dockerfile.artifact .
           docker push "${IMAGE_SHA}"
