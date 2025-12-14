@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      IMAGE_REF_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
+      IMAGE_REF_LATEST: ${{ steps.set_image_ref.outputs.image_ref_latest }}
     if: github.event_name == 'pull_request'
 
     steps:
@@ -24,7 +27,7 @@ jobs:
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
 
       - name: Make build.sh copy.sh executable
-        run: chmod +x build.sh copy.sh
+        run: chmod +x build.sh copy.sh || true
 
       - name: Build and push Docker image (cache)
         uses: docker/build-push-action@v5
@@ -47,20 +50,29 @@ jobs:
           ls -la output || true
           echo "=== Recursive listing ==="
           ls -R output || true
+          
+      - name: Create image tags and set outputs
+        id: set_image_ref
+        run: |
+          short_sha=${GITHUB_SHA::8}
+          tag_sha="sha-${short_sha}"
+          tag_latest="latest"
+          image_base="ghcr.io/${{ github.repository }}/qt-log4cpp-bin"
+          image_ref_sha="${image_base}:${tag_sha}"
+          image_ref_latest="${image_base}:${tag_latest}"
+          echo "image_ref_sha=${image_ref_sha}" >> $GITHUB_OUTPUT
+          echo "image_ref_latest=${image_ref_latest}" >> $GITHUB_OUTPUT
+          echo "Created tags: ${image_ref_sha} and ${image_ref_latest}"
         
       - name: Build artifact image
+        env:
+          IMAGE_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
+          IMAGE_LATEST: ${{ steps.set_image_ref.outputs.image_ref_latest }}
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest -f- . <<EOF
-          FROM alpine:3.19
-          COPY output/ /artifact/
-          EOF
-
-          # Show what was copied into the image by running a temporary container
-          echo "=== Image: /artifact (コピー先) ==="
-          docker run --rm ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
-
-          # Push the image after verification
-          docker push ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest
+          # Dockerfile.artifact は output/ を /artifact にコピーする最小箱
+          docker build -t "${IMAGE_SHA}" -t "${IMAGE_LATEST}" -f Dockerfile.artifact .
+          docker push "${IMAGE_SHA}"
+          docker push "${IMAGE_LATEST}"
 
   package:
     #if: github.event_name == 'push'
@@ -74,41 +86,44 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u acc-vcc --password-stdin
 
-      - name: pull artifact image
-        run: docker pull ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest
-
+      - name: Pull latest artifact image
+        run: |
+          image_latest="${{ needs.build.outputs.IMAGE_REF_LATEST }}"
+          echo "Pulling ${image_latest}"
+          docker pull "${image_latest}"
+          
       - name: Extract artifacts
         run: |
-          mkdir -p bin
-          echo "=== Host: ./bin (before) ==="
-          ls -la bin || true
-          echo "=== Host: ./bin recursive (before) ==="
-          ls -R bin || true
+          mkdir -p outData
+          echo "=== Host: ./outData (before) ==="
+          ls -la outData || true
+          echo "=== Host: ./outData recursive (before) ==="
+          ls -R outData || true
 
           echo "=== Image: /artifact (before) ==="
-          docker run --rm ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
+          docker run --rm "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
             sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
 
           echo "=== Copying /artifact -> ./bin ==="
-          docker run --rm -v ${{ github.workspace }}:/out ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
-            sh -c "cp -r /artifact/. /out/bin/"
+          docker run --rm -v ${{ github.workspace }}:/out "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
+            sh -c "cp -r /artifact/. /out/outData/"
 
-          echo "=== Host: ./bin (after) ==="
-          ls -la bin
-          echo "=== Host: ./bin recursive (after) ==="
-          ls -R bin
+          echo "=== Host: ./outData (after) ==="
+          ls -la outData
+          echo "=== Host: ./outData recursive (after) ==="
+          ls -R outData
 
           echo "=== Image: /artifact (after) ==="
-          docker run --rm ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest \
+          docker run --rm "${{ needs.build.outputs.IMAGE_REF_LATEST }}" \
             sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
 
       - name: Create artifact name (timestamp)
         run: |
           ts=$(date +%Y%m%d%H%M%S)
-          echo "ARTIFACT_NAME=bin${ts}" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=release${ts}" >> $GITHUB_ENV
 
       #- name: Upload artifact (upload bin directory as-is)
       #  uses: actions/upload-artifact@v4
       #  with:
       #    name: ${{ env.ARTIFACT_NAME }}
-      #    path: bin
+      #    path: outData
