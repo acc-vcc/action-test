@@ -39,7 +39,14 @@ jobs:
         run: docker run --rm -v ${{ github.workspace }}:/app ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest ./build.sh
 
       - name: Copy artifacts
-        run: ./copy.sh   # ← 成果物コピー処理をスクリプト化
+        run: ./copy.sh  # ← 成果物コピー処理をスクリプト化
+        
+      - name: Show host-side output directory (copy source)
+        run: |
+          echo "=== Host: output/ (コピー元) ==="
+          ls -la output || true
+          echo "=== Recursive listing ==="
+          ls -R output || true
         
       - name: Build artifact image
         run: |
@@ -47,6 +54,12 @@ jobs:
           FROM alpine:3.19
           COPY output/ /artifact/
           EOF
+
+          # Show what was copied into the image by running a temporary container
+          echo "=== Image: /artifact (コピー先) ==="
+          docker run --rm ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest sh -c "ls -la /artifact || true; echo '--- recursive ---'; ls -R /artifact || true"
+
+          # Push the image after verification
           docker push ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest
 
   package:
