@@ -1,115 +1,169 @@
-name: Build specific target
+name: CI/CD with Docker Cache (Qt + log4cpp)
+
+permissions:
+  actions: write
+  contents: read
 
 on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       target_dir:
         description: 'Which directory to build: app1, app2, app3, all'
-        required: true
+        required: false
         default: 'app1'
       use_latest_env:
         description: 'Try to pull env images before building (true/false)'
         required: false
         default: 'true'
 
-permissions:
-  contents: read
-  actions: write
-
 jobs:
-  build-target:
+  build:
     runs-on: ubuntu-latest
-    env:
-      GHCR_REG: ghcr.io
+    outputs:
+      IMAGE_REF_SHA: ${{ steps.set_image_ref.outputs.image_ref_sha }}
+      IMAGE_REF_LATEST: ${{ steps.set_image_ref.outputs.image_ref_latest }}
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+
     steps:
-      - name: Checkout
+      - name: Checkout code (full history for diff)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Prepare workspace
-        run: |
-          # ensure clean output
-          rm -rf output || true
-          mkdir -p output
-
-      - name: Set variables
-        id: vars
-        run: |
-          echo "target=${{ github.event.inputs.target_dir }}" >> $GITHUB_OUTPUT
-          echo "use_latest=${{ github.event.inputs.use_latest_env }}" >> $GITHUB_OUTPUT
+      - name: Detect changed groups
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            app1:
+              - 'app1/**'
+            app2:
+              - 'app2/**'
+            app3:
+              - 'app3/**'
+            dockerfile:
+              - 'Dockerfile'
+            dockerfile_java:
+              - 'Dockerfile.java'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker-container
 
-      - name: Log in to GHCR
-        if: ${{ secrets.GHCR_PAT != '' }}
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ${GHCR_REG} -u ${{ github.repository_owner }} --password-stdin
+      - name: Log in to GitHub Container Registry
+        if: ${{ secrets.GHCR_PAT }}
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
-      - name: Try pull env images
-        if: steps.vars.outputs.use_latest == 'true'
+      - name: Try to pull C++ env image (use cached env if available)
+        id: pull_cpp_env
         run: |
-          docker pull ${GHCR_REG}/${{ github.repository }}/qt-log4cpp-app:latest || true
-          docker pull ${GHCR_REG}/${{ github.repository }}/java-app:latest || true
-
-      - name: Build selected targets
-        run: |
-          set -euo pipefail
-          TARGET="${{ steps.vars.outputs.target }}"
-          build_one() {
-            app="$1"
-            echo "=== Building ${app} ==="
-            case "${app}" in
-              app1|app2)
-                image="${GHCR_REG}/${{ github.repository }}/qt-log4cpp-app:latest"
-                workdir="/app/${app}"
-                ;;
-              app3)
-                image="${GHCR_REG}/${{ github.repository }}/java-app:latest"
-                workdir="/app/${app}"
-                ;;
-              *)
-                echo "Unknown app: ${app}"
-                return 1
-                ;;
-            esac
-            # run build inside env image; copy.sh should write to host's output/<app>
-            docker run --rm -v "${{ github.workspace }}":/app -w "${workdir}" "${image}" \
-              sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
-          }
-
-          if [ "${TARGET}" = "all" ]; then
-            for a in app1 app2 app3; do
-              build_one "${a}"
-            done
+          if docker pull ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest; then
+            echo "pulled_cpp=true" >> $GITHUB_OUTPUT
           else
-            build_one "${TARGET}"
+            echo "pulled_cpp=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Show output
-        run: |
-          echo "=== Host: output ==="
-          ls -la output || true
-          ls -R output || true
+      - name: Build and push Docker image (cache)
+        if: ${{ steps.pull_cpp_env.outputs.pulled_cpp == 'false' || steps.filter.outputs.dockerfile == 'true' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest,ghcr.io/${{ github.repository }}/qt-log4cpp-app:sha-${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/qt-log4cpp-app:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/qt-log4cpp-app:cache,mode=max
 
-      - name: Upload artifact for target
-        if: always()
+      - name: Try to pull Java env image (use cached env if available)
+        id: pull_java_env
+        run: |
+          if docker pull ghcr.io/${{ github.repository }}/java-app:latest; then
+            echo "pulled_java=true" >> $GITHUB_OUTPUT
+          else
+            echo "pulled_java=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push Java env image (with cache)
+        if: ${{ steps.pull_java_env.outputs.pulled_java == 'false' || steps.filter.outputs.dockerfile_java == 'true' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.java
+          push: true
+          tags: ghcr.io/${{ github.repository }}/java-app:latest,ghcr.io/${{ github.repository }}/java-app:sha-${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/java-app:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/java-app:cache,mode=max
+
+      - name: Prepare output dir
+        run: |
+          rm -rf output || true
+          mkdir -p output
+
+      - name: Build and Copy artifacts app1 (only if changed)
+        if: ${{ steps.filter.outputs.app1 == 'true' || github.event.inputs.target_dir == 'app1' || github.event.inputs.target_dir == 'all' }}
+        run: |
+          echo "=== Building app1 ==="
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/app1 ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
+            sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
+
+      - name: Upload output app1
+        if: ${{ steps.filter.outputs.app1 == 'true' || github.event.inputs.target_dir == 'app1' || github.event.inputs.target_dir == 'all' }}
         uses: actions/upload-artifact@v4
         with:
-          name: output-${{ github.event.inputs.target_dir }}
-          path: |
-            output/${{ github.event.inputs.target_dir }}
-            # if all, upload whole output
-            output
+          name: output-app1
+          path: output/app1
 
-      - name: Create image tags
+      - name: Build and Copy artifacts app2 (only if changed)
+        if: ${{ steps.filter.outputs.app2 == 'true' || github.event.inputs.target_dir == 'app2' || github.event.inputs.target_dir == 'all' }}
+        run: |
+          echo "=== Building app2 ==="
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/app2 ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
+            sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
+
+      - name: Upload output app2
+        if: ${{ steps.filter.outputs.app2 == 'true' || github.event.inputs.target_dir == 'app2' || github.event.inputs.target_dir == 'all' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: output-app2
+          path: output/app2
+
+      - name: Build and Copy artifacts app3 (only if changed)
+        if: ${{ steps.filter.outputs.app3 == 'true' || github.event.inputs.target_dir == 'app3' || github.event.inputs.target_dir == 'all' }}
+        run: |
+          echo "=== Building app3 ==="
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/app3 ghcr.io/${{ github.repository }}/java-app:latest \
+            sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
+
+      - name: Upload output app3
+        if: ${{ steps.filter.outputs.app3 == 'true' || github.event.inputs.target_dir == 'app3' || github.event.inputs.target_dir == 'all' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: output-app3
+          path: output/app3
+
+      - name: Show host-side output directory (copy source)
+        run: |
+          echo "=== Host: output/ (コピー元) ==="
+          ls -la output || true
+          echo "=== Recursive listing ==="
+          ls -R output || true
+
+      - name: Create image tags and set outputs
         id: set_image_ref
         run: |
-          short=${GITHUB_SHA::8}
-          echo "image_ref_sha=ghcr.io/${{ github.repository }}/qt-log4cpp-bin:sha-${short}" >> $GITHUB_OUTPUT
-          echo "image_ref_latest=ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest" >> $GITHUB_OUTPUT
+          short_sha=${GITHUB_SHA::8}
+          tag_sha="sha-${short_sha}"
+          tag_latest="latest"
+          image_base="ghcr.io/${{ github.repository }}/qt-log4cpp-bin"
+          image_ref_sha="${image_base}:${tag_sha}"
+          image_ref_latest="${image_base}:${tag_latest}"
+          echo "image_ref_sha=${image_ref_sha}" >> $GITHUB_OUTPUT
+          echo "image_ref_latest=${image_ref_latest}" >> $GITHUB_OUTPUT
+          echo "Created tags: ${image_ref_sha} and ${image_ref_latest}"
 
       - name: Build artifact image
         env:
@@ -120,7 +174,138 @@ jobs:
             echo "No output/ or it's empty; skipping artifact image build."
             exit 0
           fi
-          # build using Dockerfile.artifact; use output as context so COPY output/ /artifact/ picks current files
+          # Dockerfile.artifact は output/ を /artifact にコピーする最小箱
           docker build -t "${IMAGE_SHA}" -t "${IMAGE_LATEST}" -f Dockerfile.artifact .
           docker push "${IMAGE_SHA}"
           docker push "${IMAGE_LATEST}"
+
+  package:
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    outputs:
+      ALL_OUTPUT_ARTIFACT: all-output
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set image ref fallback to latest
+        id: set_image_ref_pkg
+        run: |
+          image_fallback="ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest"
+          echo "image_ref_latest=${image_fallback}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        if: ${{ secrets.GHCR_PAT }}
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+
+      - name: Pull latest artifact image
+        id: pull_image
+        run: |
+          image_latest="${{ steps.set_image_ref_pkg.outputs.image_ref_latest }}"
+          echo "Pulling ${image_latest}"
+          docker pull "${image_latest}" || true
+
+      - name: Extract artifacts
+        run: |
+          mkdir -p outData
+          docker run --rm -v ${{ github.workspace }}:/out "${{ steps.set_image_ref_pkg.outputs.image_ref_latest }}" \
+            sh -c "cp -r /artifact/. /out/outData" || true
+          echo "=== Host: outData ==="
+          ls -la outData || true
+          ls -R outData || true
+
+      - name: Upload all output as single artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-output
+          path: outData
+
+  detect-outputs:
+    needs: package
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set_matrix.outputs.matrix }}
+    steps:
+      - name: Download all-output
+        uses: actions/download-artifact@v4
+        with:
+          name: all-output
+          path: all-output
+
+      - name: Detect subdirectories and emit matrix
+        id: set_matrix
+        run: |
+          cd all-output || exit 0
+          dirs=$(find . -maxdepth 1 -mindepth 1 -type d -printf '%P\n' | sort -u)
+          if [ -z "$dirs" ]; then
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+            echo "::warning file=detect-outputs::no subdirectories found under outData"
+          else
+            json=$(printf '%s\n' $dirs | jq -R -s -c 'split("\n")[:-1]')
+            echo "matrix=$json" >> $GITHUB_OUTPUT
+          fi
+
+  upload-per-dir:
+    needs: detect-outputs
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJson(needs.detect-outputs.outputs.matrix) }}
+    steps:
+      - name: Download all-output
+        uses: actions/download-artifact@v4
+        with:
+          name: all-output
+          path: all-output
+
+      - name: Normalize dir name and set short sha
+        id: norm
+        run: |
+          dir="${{ matrix.dir }}"
+          safe=$(echo "$dir" | tr '/ ' '_' | tr -cd '[:alnum:]_-')
+          short=${GITHUB_SHA::8}
+          echo "safe=$safe" >> $GITHUB_OUTPUT
+          echo "short=$short" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact for directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.norm.outputs.safe }}-${{ steps.norm.outputs.short }}
+          path: all-output/${{ matrix.dir }}
+
+  cleanup-intermediate:
+    needs: upload-per-dir
+    runs-on: ubuntu-latest
+    if: ${{ needs.upload-per-dir.result == 'success' }}
+    steps:
+      - name: Install jq (if needed)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Delete intermediate artifact all-output
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          echo "Listing artifacts for run ${RUN_ID} in ${REPO}..."
+          artifacts_json=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/artifacts")
+          id=$(echo "$artifacts_json" | jq -r '.artifacts[] | select(.name=="all-output") | .id' || true)
+          if [ -z "$id" ] || [ "$id" = "null" ]; then
+            echo "No all-output artifact found; nothing to delete."
+            exit 0
+          fi
+          echo "Found artifact id: $id. Deleting..."
+          resp=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            -H "Authorization: token ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/actions/artifacts/${id}")
+          if [ "$resp" = "204" ]; then
+            echo "Deleted artifact id ${id} successfully."
+          else
+            echo "Failed to delete artifact id ${id}. HTTP status: $resp"
+            exit 1
+          fi
