@@ -309,8 +309,10 @@ jobs:
           # Dockerfile.artifact は output/ を /artifact にコピーする最小箱
           docker build -t "${IMAGE_SHA}" -t "${IMAGE_LATEST}" -f Dockerfile.artifact .
           docker push "${IMAGE_SHA}"
-          
-      - name: call package (only dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        uses: ./.github/workflows/package.yml
           docker push "${IMAGE_LATEST}"
+
+  call_package:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/package.yml
+    secrets: inherit
