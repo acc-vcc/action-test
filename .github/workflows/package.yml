@@ -20,7 +20,6 @@ jobs:
       - name: Set image ref fallback to latest
         id: set_image_ref_pkg
         run: |
-          # Try to use a deterministic latest tag; you can change to plain :latest if preferred
           image_fallback="ghcr.io/${{ github.repository }}/qt-log4cpp-bin:latest"
           echo "image_ref_latest=${image_fallback}" >> $GITHUB_OUTPUT
 
@@ -34,7 +33,6 @@ jobs:
           fi
 
       - name: Pull latest artifact image
-        id: pull_image
         run: |
           image_latest="${{ steps.set_image_ref_pkg.outputs.image_ref_latest }}"
           echo "Pulling ${image_latest}"
@@ -50,7 +48,6 @@ jobs:
           ls -R outData || true
 
       - name: Upload all output as single artifact
-        # 中間出力
         uses: actions/upload-artifact@v4
         with:
           name: all-output
@@ -71,14 +68,12 @@ jobs:
       - name: Detect subdirectories and emit matrix
         id: set_matrix
         run: |
-          cd all-output || exit 0
-          # list only directories directly under outData
+          cd all-output/outData || exit 0
           dirs=$(find . -maxdepth 1 -mindepth 1 -type d -printf '%P\n' | sort -u)
           if [ -z "$dirs" ]; then
             echo "matrix=[]" >> $GITHUB_OUTPUT
             echo "::warning file=detect-outputs::no subdirectories found under outData"
           else
-            # convert to JSON array
             json=$(printf '%s\n' $dirs | jq -R -s -c 'split("\n")[:-1]')
             echo "matrix=$json" >> $GITHUB_OUTPUT
           fi
@@ -110,9 +105,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.norm.outputs.safe }}-${{ steps.norm.outputs.short }}
-          path: all-output/${{ matrix.dir }}
+          path: all-output/outData/${{ matrix.dir }}
 
-  # 中間出力削除
   cleanup-intermediate:
     needs: upload-per-dir
     runs-on: ubuntu-latest
