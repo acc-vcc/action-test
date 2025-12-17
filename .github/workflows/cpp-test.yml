@@ -186,7 +186,8 @@ jobs:
       
           if [ -n "$files" ]; then
           # echo してパイプで while に渡す（here-doc を使わない）
-            echo "$files" | while IFS= read -r f; do
+            mapfile -t arr <<< "$files"
+            for f in "${arr[@]}"; do
               case "$f" in
                 app1/*) app1=true ;;
                 app2/*) app2=true ;;
