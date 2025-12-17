@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     QElapsedTimer timer;
     timer.start();
 
-    int a = 2, b = 3;
+    int a = 2, b = 5;
     int sum = add(a, b);
     root.info("add(%d,%d) = %d", a, b, sum);
 
