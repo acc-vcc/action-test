@@ -5,4 +5,4 @@ set -e
 mkdir -p /app/output/app4
 
 # 必要な成果物をコピー
-cp -p logfilter /app/output/app4/
+cp -p build/logfilter /app/output/app4/
