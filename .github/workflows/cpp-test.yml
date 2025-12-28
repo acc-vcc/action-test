@@ -181,7 +181,7 @@ jobs:
         run: |
           set -euo pipefail
           files="${{ steps.changed.outputs.files }}"
-          app1=false; app2=false; app3=false
+          app1=false; app2=false; app3=false; app4=false
           dockerfile=false; dockerfile_java=false
       
           if [ -n "$files" ]; then
@@ -192,10 +192,11 @@ jobs:
                 app1/*) app1=true ;;
                 app2/*) app2=true ;;
                 app3/*) app3=true ;;
+                app4/*) app4=true ;;
                 Dockerfile)
                   dockerfile=true
                   # Dockerfile の変更で全アプリ再ビルドにしたければ以下を有効化
-                  app1=true; app2=true; app3=true
+                  app1=true; app2=true; app4=true
                   ;;
                 Dockerfile.java)
                   dockerfile_java=true
@@ -208,6 +209,7 @@ jobs:
           echo "app1=$app1" >> $GITHUB_OUTPUT
           echo "app2=$app2" >> $GITHUB_OUTPUT
           echo "app3=$app3" >> $GITHUB_OUTPUT
+          echo "app4=$app4" >> $GITHUB_OUTPUT
           echo "dockerfile=$dockerfile" >> $GITHUB_OUTPUT
           echo "dockerfile_java=$dockerfile_java" >> $GITHUB_OUTPUT
 
@@ -277,6 +279,13 @@ jobs:
           docker run --rm -v ${{ github.workspace }}:/app -w /app/app3 ghcr.io/${{ github.repository }}/java-app:latest \
             sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
 
+      - name: Build and Copy artifacts app4 (only if changed)
+        if: steps.detect.outputs.app4 == 'true'
+        run: |
+          echo "=== Building app4 ==="
+          docker run --rm -v ${{ github.workspace }}:/app -w /app/app4 ghcr.io/${{ github.repository }}/qt-log4cpp-app:latest \
+            sh -c "chmod +x build.sh copy.sh || true && ./build.sh && ./copy.sh"
+
       - name: Show host-side output directory (copy source)
         run: |
           echo "=== Host: output/ (コピー元) ==="
@@ -308,8 +317,8 @@ jobs:
           fi
           # Dockerfile.artifact は output/ を /artifact にコピーする最小箱
           docker build -t "${IMAGE_SHA}" -t "${IMAGE_LATEST}" -f Dockerfile.artifact .
-          docker push --max-concurrent-uploads=1 "${IMAGE_SHA}"
-          docker push --max-concurrent-uploads=1 "${IMAGE_LATEST}"
+          docker push "${IMAGE_SHA}"
+          docker push "${IMAGE_LATEST}"
 
   call_package:
     needs: build
