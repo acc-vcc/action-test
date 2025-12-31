@@ -27,10 +27,10 @@ jobs:
           target: 'desktop'
           arch: 'win64_mingw73'
 
-      # Qt の MinGW を PATH に追加（最重要）
-      - name: Add Qt MinGW to PATH
-        run: |
-          echo "${{ env.Qt5_Dir }}\bin" >> $env:GITHUB_PATH
+      # Qt MinGW を PATH の先頭に強制
+      - name: Force PATH to use Qt MinGW only 
+        run: | 
+          echo "PATH=${{ env.Qt5_Dir }}\bin;C:\Windows\system32;C:\Windows" >> $env:GITHUB_ENV
 
       # CMake configure
       - name: Configure (CMake)
