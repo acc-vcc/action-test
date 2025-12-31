@@ -12,12 +12,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Python を先にセットアップ（WindowsApps の偽 python.exe 問題を回避）
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       # Qt + MinGW をインストール
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
@@ -30,7 +24,7 @@ jobs:
       # Qt MinGW を PATH の先頭に強制
       - name: Force PATH to use Qt MinGW only 
         run: | 
-          echo "PATH=${{ env.Qt5_Dir }}\bin;C:\Windows\system32;C:\Windows" >> $env:GITHUB_ENV
+          echo "PATH=${{ env.Qt5_Dir }}\bin;$env:PATH" >> $env:GITHUB_ENV
 
       # CMake configure
       - name: Configure (CMake)
