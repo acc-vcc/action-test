@@ -32,7 +32,7 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build build -- -j4 --config Release
+          cmake --build build --config Release -- -j4
 
       - name: Upload artifact (Windows exe)
         uses: actions/upload-artifact@v4
