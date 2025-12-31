@@ -28,7 +28,7 @@ jobs:
 
       - name: Add Qt MinGW to PATH
         run: |
-          echo "${{ env.Qt5_Dir }}\bin" >> $env:GITHUB_ENV
+          echo "PATH=${{ env.Qt5_Dir }}\bin;$env:PATH" >> $env:GITHUB_ENV
 
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v3
