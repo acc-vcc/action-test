@@ -24,7 +24,7 @@ bool CsvParser::parseFile(const QString &filePath, CsvStats &stats)
 
         stats.rowCount++;
 
-        QStringList parts = line.split(',');
+        auto parts = line.splitRef(',');
         if (!parts.isEmpty()) {
             bool ok = false;
             double v = parts[0].toDouble(&ok);
