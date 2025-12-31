@@ -2,7 +2,8 @@ name: Build (Windows)
 
 on:
   push:
-    branches: [feature/app5]
+    branches:
+      - feature/app5
 
 jobs:
   build-windows:
@@ -12,7 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Qt + MinGW をインストール
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
@@ -21,22 +26,23 @@ jobs:
           target: 'desktop'
           arch: 'win64_mingw73'
 
-      # Qt MinGW を PATH の先頭に強制
-      - name: Force PATH to use Qt MinGW only 
-        run: | 
-          echo "PATH=${{ env.Qt5_Dir }}\bin;$env:PATH" >> $env:GITHUB_ENV
+      - name: Add Qt MinGW to PATH
+        run: |
+          echo "${{ env.Qt5_Dir }}\bin" >> $env:GITHUB_ENV
 
-      # CMake configure
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v3
+
       - name: Configure (CMake)
         run: |
-          cmake -G "MinGW Makefiles" -S app5 -B build
+          cmake -G Ninja -S app5 -B build ^
+            -DCMAKE_C_COMPILER=${{ env.Qt5_Dir }}\bin\gcc.exe ^
+            -DCMAKE_CXX_COMPILER=${{ env.Qt5_Dir }}\bin\g++.exe
 
-      # Build
       - name: Build
         run: |
           cmake --build build -- -j4
 
-      # exe のみ artifact として保存
       - name: Upload artifact (Windows exe)
         uses: actions/upload-artifact@v4
         with:
