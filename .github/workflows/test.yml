@@ -1,8 +1,8 @@
 name: Build (Windows)
 
 on:
-  pull_request:
-    branches:[feature/app5]
+  push:
+    branches: [feature/app5]
 
 jobs:
   build-windows:
