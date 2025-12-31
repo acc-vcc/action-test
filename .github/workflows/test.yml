@@ -22,9 +22,9 @@ jobs:
           tools: 'tools_mingw81'
 
       # Qt の MinGW を PATH の先頭に追加（固定パスではなく環境変数を使う）
-      #- name: Add Qt MinGW to PATH
-      #  run: |
-      #    echo "PATH=${{ env.IQTA_TOOLS }}\mingw810_64\bin;$env:PATH" >> $env:GITHUB_ENV
+      - name: Add Qt MinGW to PATH
+        run: |
+          echo "PATH=${{ env.IQTA_TOOLS }}\mingw810_64\bin;$env:PATH" >> $env:GITHUB_ENV
 
       - name: Configure (CMake)
         run: |
