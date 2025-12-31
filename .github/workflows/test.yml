@@ -18,14 +18,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Qt
+      # Qt + MinGW を確実にインストール
+      - name: Install Qt (with MinGW)
         uses: jurplel/install-qt-action@v3
         with:
           version: '5.12.2'
           host: 'windows'
           target: 'desktop'
           arch: 'win64_mingw73'
+          tools: 'tools_mingw,tools_mingwqt'
 
+      # Qt の MinGW を PATH の先頭に追加（既存 PATH は保持）
       - name: Add Qt MinGW to PATH
         run: |
           echo "PATH=${{ env.Qt5_Dir }}\bin;$env:PATH" >> $env:GITHUB_ENV
@@ -33,11 +36,14 @@ jobs:
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v3
 
+      # PowerShell の行継続はバッククォート（`）
       - name: Configure (CMake)
         run: |
-          cmake -G Ninja -S app5 -B build `
-            -DCMAKE_C_COMPILER=${{ env.Qt5_Dir }}\bin\gcc.exe `
-            -DCMAKE_CXX_COMPILER=${{ env.Qt5_Dir }}\bin\g++.exe
+          cmake -G Ninja `
+            -S app5 `
+            -B build `
+            -DCMAKE_C_COMPILER="${{ env.Qt5_Dir }}\bin\gcc.exe" `
+            -DCMAKE_CXX_COMPILER="${{ env.Qt5_Dir }}\bin\g++.exe"
 
       - name: Build
         run: |
