@@ -12,11 +12,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Python を先にセットアップ（WindowsApps の偽 python.exe 問題を回避）
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
+      # Qt + MinGW をインストール
       - name: Install Qt
         uses: jurplel/install-qt-action@v3
         with:
@@ -25,18 +27,22 @@ jobs:
           target: 'desktop'
           arch: 'win64_mingw73'
 
-      - name: Add MinGW to PATH
+      # Qt の MinGW を PATH に追加（最重要）
+      - name: Add Qt MinGW to PATH
         run: |
-          echo "C:\Qt\Tools\mingw730_64\bin" >> $env:GITHUB_PATH
+          echo "${{ env.Qt5_Dir }}\bin" >> $env:GITHUB_PATH
 
+      # CMake configure
       - name: Configure (CMake)
         run: |
           cmake -G "MinGW Makefiles" -S app5 -B build
 
+      # Build
       - name: Build
         run: |
           cmake --build build -- -j4
 
+      # exe のみ artifact として保存
       - name: Upload artifact (Windows exe)
         uses: actions/upload-artifact@v4
         with:
