@@ -39,11 +39,12 @@ jobs:
       # PowerShell の行継続はバッククォート（`）
       - name: Configure (CMake)
         run: |
-          cmake -G Ninja `
-            -S app5 `
-            -B build `
-            -DCMAKE_C_COMPILER="D:\a\action-test\Qt\Tools\mingw810_64\bin\gcc.exe" `
-            -DCMAKE_CXX_COMPILER="D:\a\action-test\Qt\Tools\mingw810_64\bin\g++.exe"
+          cmake -G "MinGW Makefiles" -S app5 -B build
+          #cmake -G Ninja `
+          #  -S app5 `
+          #  -B build `
+          #  -DCMAKE_C_COMPILER="D:\a\action-test\Qt\Tools\mingw810_64\bin\gcc.exe" `
+          #  -DCMAKE_CXX_COMPILER="D:\a\action-test\Qt\Tools\mingw810_64\bin\g++.exe"
 
       - name: Build
         run: |
